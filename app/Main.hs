@@ -1,35 +1,54 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
-
+{-# LANGUAGE OverloadedStrings
+            , QuasiQuotes
+            , DeriveGeneric
+            , RecordWildCards
+#-}
 
 module Main where
 
-import Web.Scotty
+import Data.Aeson (Value, FromJSON, ToJSON, eitherDecode)
+import Data.Aeson.QQ
+import Data.ByteString.Lazy.UTF8 (fromString)
+import Data.Monoid ((<>))
 import Network.HTTP.Conduit hiding (setRequestBodyLB)
 import Network.HTTP.Simple hiding (httpLbs)
-import Data.Aeson.QQ
-import Data.Aeson (Value)
-import Data.ByteString.Lazy.UTF8 (fromString)
-import qualified Data.ByteString.Lazy as Lazy
 import Network.HTTP.Types.Header
-import Data.Monoid ((<>))
 import System.Environment (getEnv)
-
+import Web.Scotty
+import qualified Data.ByteString.Lazy as Lazy
 import Data.String.Conversions (cs)
+import GHC.Generics
 
+data Language =
+  Language { name :: String
+           , stars :: Int
+           } deriving (Show, Generic)
 
-httpPost :: String -> String -> IO Lazy.ByteString
-httpPost url post = do
-  initReq <- parseUrl url
+data Languages =
+  Languages { error :: Bool
+            , rows :: [[String, Int]]
+            } deriving (Show, Generic)
+
+{- instance FromJSON Language where -}
+{-   parseJSON = withObject "langauge" $ \o -> do -}
+{-     name <- o .: "name" -}
+{-     age  <- o .: "age" -}
+{-     return Person{..} -}
+
+{- instance ToJSON Language -}
+
+instance FromJSON Languages
+instance ToJSON Languages
+
+bigQuery :: String -> IO Lazy.ByteString
+bigQuery post = do
+  initReq <- parseUrl "https://pyapi-vida.herokuapp.com/bigquery"
   let req = setRequestBodyLBS (fromString post)
                     $ initReq { secure = True
                               , method = "POST"
                               }
   res <- withManager $ httpLbs req
   pure $ responseBody res
-
-bigQuery :: String -> IO Lazy.ByteString
-bigQuery = httpPost "https://pyapi-vida.herokuapp.com/bigquery"
 
 githubGraphQL :: Value -> IO Lazy.ByteString
 githubGraphQL post = do
@@ -47,6 +66,7 @@ githubGraphQL post = do
   print req
   pure $ responseBody res
 
+{- https://github.com/sol/aeson-qq -}
 graphQuery :: Value
 graphQuery = [aesonQQ|
 {"query": "fragment repository on Repository {
@@ -83,6 +103,8 @@ main = do
     \ WHERE events.type = 'WatchEvent'\
     \ GROUP BY 1 ORDER BY 2 DESC LIMIT 1000"
   result <- bigQuery query
+  let d = eitherDecode result :: Either String Languages
+  print d
   res <- githubGraphQL graphQuery
   print res
   scotty 3000 $ do
