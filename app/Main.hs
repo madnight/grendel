@@ -3,14 +3,9 @@
 module Main where
 
 import Web.Scotty
-import Data.Monoid (mconcat)
 import Network.HTTP.Conduit hiding (setRequestBodyLB)
 import Network.HTTP.Simple hiding (httpLbs)
 import Data.ByteString.Lazy.UTF8 (fromString)
-import Data.ByteString.Lazy (unpack)
-import Language.Haskell.TH.Ppr (bytesToString)
-import Data.String.Conversions (cs)
-
 import qualified Data.ByteString.Lazy as Lazy
 
 bigQuery :: String -> IO Lazy.ByteString
@@ -31,7 +26,6 @@ main = do
     \ WHERE events.type = 'WatchEvent'\
     \ GROUP BY 1 ORDER BY 2 DESC LIMIT 1000"
   result <- bigQuery query
-  let s = cs result :: String
   scotty 3000 $
-    get "/:word" $ json s
+    get "/:word" $ raw result
 

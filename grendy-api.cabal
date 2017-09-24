@@ -29,6 +29,9 @@ executable grendy-api-exe
                      , bytestring
                      , utf8-string
                      , template-haskell
+                     , text
+                     , aeson
+                     , attoparsec
                      , string-conversions
                      , http-conduit
   default-language:    Haskell2010
