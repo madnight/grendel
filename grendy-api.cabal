@@ -26,6 +26,8 @@ executable grendy-api-exe
   build-depends:       base
                      , grendy-api
                      , scotty
+                     , bytestring
+                     , http-conduit
   default-language:    Haskell2010
 
 test-suite grendy-api-test
