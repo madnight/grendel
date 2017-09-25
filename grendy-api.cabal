@@ -32,12 +32,16 @@ executable grendy-api-exe
                      , aeson-qq
                      , utf8-string
                      , template-haskell
+                     , http-client-tls
+                     , lens
                      , text
                      , aeson
                      , attoparsec
                      , http-types
                      , string-conversions
+                     , wreq
                      , http-conduit
+                     , http-client
   default-language:    Haskell2010
 
 test-suite grendy-api-test

@@ -1,26 +1,24 @@
 {-# LANGUAGE
    OverloadedStrings
  , QuasiQuotes
+ , FlexibleContexts
  , DeriveGeneric
- , RecordWildCards
 #-}
 
 module Main where
 
 import Data.Aeson (Value, FromJSON, ToJSON, eitherDecode)
-import Data.Aeson.Types
 import Data.Aeson.QQ
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Monoid ((<>))
-import Network.HTTP.Conduit hiding (setRequestBodyLB)
-import Network.HTTP.Simple hiding (httpLbs)
-import Network.HTTP.Types.Header
 import System.Environment (getEnv)
 import Web.Scotty
 import qualified Data.ByteString.Lazy as Lazy
 import Data.String.Conversions (cs)
 import GHC.Generics
-import Data.Either
+import qualified Network.Wreq as W
+import Control.Lens
+import Data.Maybe
 
 data Language = Language String Int
   deriving (Show, Generic)
@@ -36,34 +34,22 @@ instance ToJSON Languages
 instance FromJSON Language
 instance ToJSON Language
 
--- | Either decode error message or parsed Languages
+-- | Either contains decode error message or parsed Languages
 bigQuery :: String -> IO (Either String Languages)
-bigQuery post = do
-  initReq <- parseUrl "https://pyapi-vida.herokuapp.com/bigquery"
-  res <- withManager
-    . httpLbs
-    . setRequestBodyLBS (fromString post)
-    $ initReq { secure = True
-              , method = "POST"
-              }
-  print res
-  pure . eitherDecode $ responseBody res
+bigQuery query = do
+    r <- W.post "https://pyapi-vida.herokuapp.com/bigquery" (fromString query)
+    pure . eitherDecode $ fromMaybe "Empty Response" (r ^? W.responseBody)
+
 
 githubGraphQL :: Value -> IO Lazy.ByteString
-githubGraphQL post = do
-  initReq <- parseUrl "https://api.github.com/graphql"
-  token <- getEnv "GITHUB_API_TOKEN"
-  res <- withManager
-    . httpLbs
-    . setRequestBodyJSON post
-    $ initReq { secure = True
-              , method = "POST"
-              , requestHeaders = [
-                ( hAuthorization, cs $ "bearer " <> token ),
-                ( hUserAgent, "haskcasl" )
-                ]
-              }
-  pure $ responseBody res
+githubGraphQL query = do
+    token <- getEnv "GITHUB_API_TOKEN"
+    r <- W.postWith (header token) "https://api.github.com/graphql" query
+    pure (r ^. W.responseBody)
+      where header token = W.defaults
+              & W.header "Authorization" .~ [cs ("bearer " <> token)]
+              & W.header "User-Agent" .~ ["Haskell Network.HTTP.Client"]
+
 
 graphQuery :: Value
 graphQuery = [aesonQQ|
