@@ -55,33 +55,35 @@ githubGraphQL query = do
 ghQuery :: String -> Value
 ghQuery repos = [aesonQQ|
 {
-  "query": "query ($repos: String!) {
-      search(first: 100, type: REPOSITORY, query: $repos) {
-         edges {
-             node {
-                 ... on Repository {
-                     nameWithOwner
-                     createdAt
-                     description
-                     license
-                     primaryLanguage {
-                         name
-                     }
-                     stargazers {
-                         totalCount
-                     }
-                     owner {
-                         avatarUrl
-                     }
-                  }
-              }
-          }
-       }
+    "query": "query ($repos: String!) {
+        search(first: 100, type: REPOSITORY, query: $repos) {
+            edges {
+                node {
+                    ... on Repository {
+                        nameWithOwner
+                        createdAt
+                        description
+                        license
+                        primaryLanguage {
+                            name
+                        }
+                        stargazers {
+                            totalCount
+                        }
+                        owner {
+                            avatarUrl
+                        }
+                    }
+                }
+            }
+        }
     }",
+
     "variables": {
-      "repos": #{repos}
+        "repos": #{repos}
     },
-    "operationName":null
+
+    "operationName": null
 }
 |]
 
