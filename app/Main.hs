@@ -41,6 +41,7 @@ bigQuery query = do
     pure . eitherDecode $ fromMaybe "Empty Response" (r ^? W.responseBody)
 
 
+-- | Returns raw github answers
 githubGraphQL :: Value -> IO Lazy.ByteString
 githubGraphQL query = do
     token <- getEnv "GITHUB_API_TOKEN"
@@ -73,13 +74,17 @@ graphQuery = [aesonQQ|
         a: repository(owner: \"facebook\", name: \"react\") {
             ...repository
         }
-        b: repository(owner: \"madnight\", name: \"githut\") {
+        b: repository(owner: \"#{owner}\", name: \"#{name}\") {
             ...repository
         }
     }",
    "variables":null
 }
 |]
+  where
+    key = "a"
+    owner = "madnight"
+    name = "githut"
 
 bigQuerySQL :: String
 bigQuerySQL =
@@ -89,12 +94,20 @@ bigQuerySQL =
     \ WHERE events.type = 'WatchEvent'\
     \ GROUP BY 1 ORDER BY 2 DESC LIMIT 1000"
 
+fromRight :: Either a b -> b
+fromRight (Right b) = b
+
+langInt :: Language -> Int
+langInt (Language a b) = b
+
+langStr :: Language -> String
+langStr (Language a b) = a
 
 main :: IO ()
 main = do
   result <- bigQuery bigQuerySQL
-  print result
+  print $ fmap langStr (rows $ fromRight result)
   res <- githubGraphQL graphQuery
   scotty 3000 $ do
-    get "/trends" $ raw res
+    get "" $ raw res
     {- get "/test" $ raw result -}
