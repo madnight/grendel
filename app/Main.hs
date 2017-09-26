@@ -19,6 +19,7 @@ import GHC.Generics
 import qualified Network.Wreq as W
 import Control.Lens
 import Data.Maybe
+import Data.List
 
 data Language = Language String Int
   deriving (Show, Generic)
@@ -51,8 +52,8 @@ githubGraphQL query = do
               & W.header "Authorization" .~ [cs ("bearer " <> token)]
               & W.header "User-Agent" .~ ["Haskell Network.HTTP.Client"]
 
-ghQuery :: Value
-ghQuery = [aesonQQ|
+ghQuery :: String -> Value
+ghQuery repos = [aesonQQ|
 {
   "query": "query ($repos: String!) {
       search(first: 100, type: REPOSITORY, query: $repos) {
@@ -83,8 +84,6 @@ ghQuery = [aesonQQ|
     "operationName":null
 }
 |]
- where
-    repos = "repo:facebook/react repo:madnight/githut" :: String
 
 
 bigQuerySQL :: String
@@ -107,8 +106,9 @@ langStr (Language a b) = a
 main :: IO ()
 main = do
   result <- bigQuery bigQuerySQL
-  print $ fmap langStr (rows $ fromRight result)
-  res <- githubGraphQL ghQuery
+  let rep = "repo:" <> (intercalate " repo:" $ take 100 $ fmap langStr (rows $ fromRight result))
+  print rep
+  res <- githubGraphQL (ghQuery rep)
   scotty 3000 $ do
     get "" $ raw res
     {- get "/test" $ raw result -}
