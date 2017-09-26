@@ -7,7 +7,8 @@
 
 module Main where
 
-import Data.Aeson (Value, FromJSON, ToJSON, eitherDecode)
+{- import Data.Aeson (Value, FromJSON, ToJSON, eitherDecode, withObject, (.:), decode, ) -}
+import Data.Aeson
 import Data.Aeson.QQ
 import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Monoid ((<>))
@@ -20,6 +21,8 @@ import qualified Network.Wreq as W
 import Control.Lens
 import Data.Maybe
 import Data.List
+import Data.Aeson.Types
+import Control.Monad (mzero)
 
 data Language = Language String Int
   deriving (Show, Generic)
@@ -35,6 +38,39 @@ instance ToJSON Languages
 instance FromJSON Language
 instance ToJSON Language
 
+data Repo = Repo { nameWithOwner :: String
+                 , createdAt :: String
+                 , primaryLanguage :: String
+                 } deriving (Show, Generic)
+data Nodes = Nodes { node :: Repo } deriving (Show, Generic)
+
+{- instance FromJSON Repo where -}
+  {- parseJSON = withObject $ \o -> Repo <$> o .: "nameWithOwner" <*> o .: "createdAt" -}
+
+instance FromJSON Repo where
+  parseJSON (Object o) =
+    Repo <$> o .: "nameWithOwner"
+         <*> o .: "createdAt"
+         <*> ((o .: "primaryLanguage") >>= (.: "name"))
+  parseJSON _ = mzero
+
+people :: Value -> Parser [Nodes]
+people = withObject mempty
+    $ \o -> o .: "data" >>= (.: "search") >>= (.: "edges")
+
+{- instance FromJSON Repo -}
+{- instance ToJSON Repo -}
+instance FromJSON Nodes
+instance ToJSON Nodes
+
+instance ToJSON Repo
+
+{- data GithubRepositories = -}
+  {- GithubRepositories { rows_ :: [Language] -}
+                     {- } deriving (Show, Generic) -}
+
+
+
 -- | Either contains decode error message or parsed Languages
 bigQuery :: String -> IO (Either String Languages)
 bigQuery query = do
@@ -43,11 +79,12 @@ bigQuery query = do
 
 
 -- | Returns raw github answers
-githubGraphQL :: Value -> IO Lazy.ByteString
+githubGraphQL :: Value -> IO (Maybe [Nodes])
 githubGraphQL query = do
     token <- getEnv "GITHUB_API_TOKEN"
     r <- W.postWith (header token) "https://api.github.com/graphql" query
-    pure (r ^. W.responseBody)
+    pure $ parseMaybe people =<< decode (r ^. W.responseBody)
+    {- pure . eitherDecode $ fromMaybe "Empty Response" $ parseMaybe (people =<< decode) (r ^. W.responseBody) -}
       where header token = W.defaults
               & W.header "Authorization" .~ [cs ("bearer " <> token)]
               & W.header "User-Agent" .~ ["Haskell Network.HTTP.Client"]
@@ -111,6 +148,7 @@ main = do
   let rep = "repo:" <> (intercalate " repo:" $ take 100 $ fmap langStr (rows $ fromRight result))
   print rep
   res <- githubGraphQL (ghQuery rep)
-  scotty 3000 $ do
-    get "" $ raw res
+  print res
+  {- scotty 3000 $ do -}
+    {- get "" $ raw res -}
     {- get "/test" $ raw result -}
