@@ -39,6 +39,7 @@ executable grendy-api-exe
                      , attoparsec
                      , http-types
                      , string-conversions
+                     , unordered-containers
                      , wreq
                      , http-conduit
                      , http-client

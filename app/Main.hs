@@ -14,7 +14,6 @@ import Data.ByteString.Lazy.UTF8 (fromString)
 import Data.Monoid ((<>))
 import System.Environment (getEnv)
 import Web.Scotty
-import qualified Data.ByteString.Lazy as Lazy
 import Data.String.Conversions (cs)
 import GHC.Generics
 import qualified Network.Wreq as W
@@ -23,9 +22,13 @@ import Data.Maybe
 import Data.List
 import Data.Aeson.Types
 import Control.Monad (mzero)
+import Control.Applicative (optional)
 
 data Language = Language String Int
   deriving (Show, Generic)
+
+
+getName (Language n _) = n
 
 data Languages =
   Languages { error :: Bool
@@ -38,24 +41,40 @@ instance ToJSON Languages
 instance FromJSON Language
 instance ToJSON Language
 
-data Repo = Repo { nameWithOwner :: String
-                 , createdAt :: String
-                 , primaryLanguage :: String
-                 } deriving (Show, Generic)
-data Nodes = Nodes { node :: Repo } deriving (Show, Generic)
+data Repo =
+  Repo { nameWithOwner :: String
+       , createdAt :: String
+       , description :: Maybe String
+       , license :: Maybe String
+       , name :: Maybe String
+       , totalCount :: Int
+       , avatarUrl :: String
+       , stars :: Maybe String
+       } deriving (Show, Generic)
 
-{- instance FromJSON Repo where -}
-  {- parseJSON = withObject $ \o -> Repo <$> o .: "nameWithOwner" <*> o .: "createdAt" -}
+addStars :: Repo -> Language -> Repo
+addStars repo lang =
+  if (nameWithOwner repo) == (getName lang)
+    then repo { stars = Just (getName lang) }
+    else repo
+
+data Nodes =
+  Nodes { node :: Repo } deriving (Show, Generic)
 
 instance FromJSON Repo where
   parseJSON (Object o) =
     Repo <$> o .: "nameWithOwner"
          <*> o .: "createdAt"
-         <*> ((o .: "primaryLanguage") >>= (.: "name"))
+         <*> optional (o .: "description")
+         <*> optional (o .: "license")
+         <*> optional ((o .: "primaryLanguage") >>= (.: "name"))
+         <*> ((o .: "stargazers") >>= (.: "totalCount"))
+         <*> ((o .: "owner") >>= (.: "avatarUrl"))
+         <*> optional (o .: "stars")
   parseJSON _ = mzero
 
-people :: Value -> Parser [Nodes]
-people = withObject mempty
+nodes :: Value -> Parser [Nodes]
+nodes = withObject mempty
     $ \o -> o .: "data" >>= (.: "search") >>= (.: "edges")
 
 {- instance FromJSON Repo -}
@@ -79,12 +98,12 @@ bigQuery query = do
 
 
 -- | Returns raw github answers
-githubGraphQL :: Value -> IO (Maybe [Nodes])
+githubGraphQL :: Value -> IO (Either String [Nodes])
 githubGraphQL query = do
     token <- getEnv "GITHUB_API_TOKEN"
     r <- W.postWith (header token) "https://api.github.com/graphql" query
-    pure $ parseMaybe people =<< decode (r ^. W.responseBody)
-    {- pure . eitherDecode $ fromMaybe "Empty Response" $ parseMaybe (people =<< decode) (r ^. W.responseBody) -}
+    pure $ parseEither nodes =<< eitherDecode (r ^. W.responseBody)
+    {- pure . eitherDecode $ fromMaybe "Empty Response" $ parseMaybe (nodes =<< decode) (r ^. W.responseBody) -}
       where header token = W.defaults
               & W.header "Authorization" .~ [cs ("bearer " <> token)]
               & W.header "User-Agent" .~ ["Haskell Network.HTTP.Client"]
@@ -139,15 +158,21 @@ fromRight (Right b) = b
 langInt :: Language -> Int
 langInt (Language a b) = b
 
-langStr :: Language -> String
-langStr (Language a b) = a
+getLangName :: Language -> String
+getLangName (Language a b) = a
+
+rep :: Either String Languages -> String
+rep result = "repo:"
+    <> (intercalate " repo:"
+    $ take 100
+    $ fmap getLangName (rows $ fromRight result))
 
 main :: IO ()
 main = do
   result <- bigQuery bigQuerySQL
-  let rep = "repo:" <> (intercalate " repo:" $ take 100 $ fmap langStr (rows $ fromRight result))
-  print rep
-  res <- githubGraphQL (ghQuery rep)
+  print result
+  print $ rep result
+  res <- githubGraphQL (ghQuery (rep result))
   print res
   {- scotty 3000 $ do -}
     {- get "" $ raw res -}
