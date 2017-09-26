@@ -51,40 +51,41 @@ githubGraphQL query = do
               & W.header "Authorization" .~ [cs ("bearer " <> token)]
               & W.header "User-Agent" .~ ["Haskell Network.HTTP.Client"]
 
-
-graphQuery :: Value
-graphQuery = [aesonQQ|
+ghQuery :: Value
+ghQuery = [aesonQQ|
 {
-  "query": "fragment repository on Repository {
-        nameWithOwner
-        createdAt
-        description
-        license
-        primaryLanguage {
-            name
-        }
-        stargazers {
-            totalCount
-        }
-        owner {
-          avatarUrl
-        }
-    }
-    query {
-        a: repository(owner: \"facebook\", name: \"react\") {
-            ...repository
-        }
-        b: repository(owner: \"#{owner}\", name: \"#{name}\") {
-            ...repository
-        }
+  "query": "query ($repos: String!) {
+      search(first: 100, type: REPOSITORY, query: $repos) {
+         edges {
+             node {
+                 ... on Repository {
+                     nameWithOwner
+                     createdAt
+                     description
+                     license
+                     primaryLanguage {
+                         name
+                     }
+                     stargazers {
+                         totalCount
+                     }
+                     owner {
+                         avatarUrl
+                     }
+                  }
+              }
+          }
+       }
     }",
-   "variables":null
+    "variables": {
+      "repos": #{repos}
+    },
+    "operationName":null
 }
 |]
-  where
-    key = "a"
-    owner = "madnight"
-    name = "githut"
+ where
+    repos = "repo:facebook/react repo:madnight/githut" :: String
+
 
 bigQuerySQL :: String
 bigQuerySQL =
@@ -107,7 +108,7 @@ main :: IO ()
 main = do
   result <- bigQuery bigQuerySQL
   print $ fmap langStr (rows $ fromRight result)
-  res <- githubGraphQL graphQuery
+  res <- githubGraphQL ghQuery
   scotty 3000 $ do
     get "" $ raw res
     {- get "/test" $ raw result -}
