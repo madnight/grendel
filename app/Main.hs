@@ -21,14 +21,14 @@ import Control.Lens
 import Data.Maybe
 import Data.List
 import Data.Aeson.Types
-import Control.Monad (mzero)
+import Control.Monad
 import Control.Applicative (optional)
 
 data Language = Language String Int
   deriving (Show, Generic)
 
-
 getName (Language n _) = n
+getS (Language _ n) = n
 
 data Languages =
   Languages { error :: Bool
@@ -49,14 +49,22 @@ data Repo =
        , name :: Maybe String
        , totalCount :: Int
        , avatarUrl :: String
-       , stars :: Maybe String
+       , stars :: Maybe Int
        } deriving (Show, Generic)
 
 addStars :: Repo -> Language -> Repo
 addStars repo lang =
   if (nameWithOwner repo) == (getName lang)
-    then repo { stars = Just (getName lang) }
-    else repo
+    then repo { stars = Just (getS lang) } else repo
+
+abc  :: [Repo] -> Language -> Maybe Repo
+abc repo lang =
+  case find (\r -> (nameWithOwner r) == (getName lang)) repo of
+         Just rep -> Just rep { stars = Just (getS lang) }
+         Nothing -> Nothing
+
+abx  :: [Repo] -> [Language] -> [Repo]
+abx repo lang = catMaybes $ (abc repo) <$> lang
 
 data Nodes =
   Nodes { node :: Repo } deriving (Show, Generic)
@@ -77,18 +85,9 @@ nodes :: Value -> Parser [Nodes]
 nodes = withObject mempty
     $ \o -> o .: "data" >>= (.: "search") >>= (.: "edges")
 
-{- instance FromJSON Repo -}
-{- instance ToJSON Repo -}
 instance FromJSON Nodes
 instance ToJSON Nodes
-
 instance ToJSON Repo
-
-{- data GithubRepositories = -}
-  {- GithubRepositories { rows_ :: [Language] -}
-                     {- } deriving (Show, Generic) -}
-
-
 
 -- | Either contains decode error message or parsed Languages
 bigQuery :: String -> IO (Either String Languages)
@@ -167,13 +166,23 @@ rep result = "repo:"
     $ take 100
     $ fmap getLangName (rows $ fromRight result))
 
+
+{- addStars :: Repo -> Language -> Repo -}
+
+{- abx  :: [Repo] -> [Language] -> [Repo] -}
 main :: IO ()
 main = do
   result <- bigQuery bigQuerySQL
-  print result
-  print $ rep result
+  {- print $ rep result -}
   res <- githubGraphQL (ghQuery (rep result))
-  print res
+  let languages = (rows (fromRight result))
+  let repos = (fmap node (fromRight res))
+  mapM_ print languages
+  mapM_ print repos
+  let t = abx repos languages
+  print t
+  print ""
+  {- print res -}
   {- scotty 3000 $ do -}
     {- get "" $ raw res -}
     {- get "/test" $ raw result -}
