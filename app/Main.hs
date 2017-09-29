@@ -21,8 +21,8 @@ applyTodayStars  :: [Repo] -> [TodayStar] -> [Repo]
 applyTodayStars repo lang = catMaybes $ applyTodayStars' repo <$> lang
   where
     applyTodayStars' repo lang =
-      case find (\r -> nameWithOwner r == getName lang) repo of
-             Just r' -> Just r' { stars = Just (getStars lang) }
+      case find (\r -> name r == getName lang) repo of
+             Just r' -> Just r' { todayStars = Just (getStars lang) }
              Nothing -> Nothing
 
 ghQuery :: String -> Value
@@ -82,7 +82,7 @@ main = do
   let graphQL = graphQuery . ghQuery $ starsToString bigQueryResult
   res <- checkAPIError <$> graphQL
   let languages = rows bigQueryResult
-  let repos = node <$> res
+  let repos =  res
   scotty 3000 . get "" . json $ applyTodayStars repos languages
   where
     checkAPIError (Right b) = b

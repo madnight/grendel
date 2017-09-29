@@ -1,67 +1,58 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Data.Grendy.GraphQL
     ( Repo(..),
-      Nodes(..),
-      nodes,
       graphQuery,
     ) where
 
-import GHC.Generics
-import Data.Aeson hiding (json)
 import Control.Applicative (optional)
-import Data.Aeson.Types
-import Data.ByteString.Lazy.UTF8 (fromString)
-import qualified Network.Wreq as W
-import Data.Maybe (fromMaybe)
-import System.Environment (getEnv)
 import Control.Lens ((^.), (.~ ), (&))
-import Data.String.Conversions (cs)
+import Data.Aeson hiding (json)
+import Data.Aeson.Types
 import Data.Monoid ((<>))
-import Control.Monad (mzero)
-
-data Nodes =
-  Nodes { node :: Repo } deriving (Show, Generic)
+import Data.String.Conversions (cs)
+import GHC.Generics
+import System.Environment (getEnv)
+import qualified Network.Wreq as W
 
 data Repo =
-  Repo { nameWithOwner :: String
-       , createdAt :: String
-       , description :: Maybe String
+  Repo { name :: String
+       , date :: String
+       , desc :: Maybe String
        , license :: Maybe String
-       , name :: Maybe String
-       , totalCount :: Int
+       , language :: Maybe String
        , avatarUrl :: String
-       , stars :: Maybe Int
+       , totalStars :: Int
+       , todayStars :: Maybe Int
        } deriving (Show, Generic)
 
-instance ToJSON Nodes
-instance FromJSON Nodes
-
 instance ToJSON Repo
-instance FromJSON Repo where
-  parseJSON (Object o) =
-    Repo <$> o .: "nameWithOwner"
-         <*> o .: "createdAt"
-         <*> optional (o .: "description")
-         <*> optional (o .: "license")
-         <*> optional ((o .: "primaryLanguage") >>= (.: "name"))
-         <*> ((o .: "stargazers") >>= (.: "totalCount"))
-         <*> ((o .: "owner") >>= (.: "avatarUrl"))
-         <*> optional (o .: "stars")
-  parseJSON _ = mzero
+instance FromJSON Repo  where
+  parseJSON = withObject mempty $ \o  -> do
+    let p = (o .: "node" >>=)
+    name       <-            p (.: "nameWithOwner")
+    date       <-            p (.: "createdAt")
+    license    <- optional $ p (.: "license")
+    desc       <- optional $ p (.: "description")
+    language   <- optional $ p (.: "primaryLanguage") >>= (.: "name")
+    avatarUrl  <-            p (.: "owner")           >>= (.: "avatarUrl")
+    totalStars <-            p (.: "stargazers")      >>= (.: "totalCount")
+    todayStars <- optional $ p (.: "stars")
+    return Repo{..}
 
-nodes :: Value -> Parser [Nodes]
-nodes = withObject mempty
+repoParser :: Value -> Parser [Repo]
+repoParser = withObject mempty
     $ \o -> o .: "data" >>= (.: "search") >>= (.: "edges")
 
--- | Returns raw github answers
-graphQuery :: Value -> IO (Either String [Nodes])
+-- | Returns a list of GitHub repositories
+graphQuery :: Value -> IO (Either String [Repo])
 graphQuery query = do
     token <- getEnv "GITHUB_API_TOKEN"
     r <- W.postWith (header token) "https://api.github.com/graphql" query
-    pure $ parseEither nodes =<< eitherDecode (r ^. W.responseBody)
+    pure $ parseEither repoParser =<< eitherDecode (r ^. W.responseBody)
       where header token = W.defaults
               & W.header "Authorization" .~ [cs ("bearer " <> token)]
               & W.header "User-Agent" .~ ["Haskell Network.HTTP.Client"]
