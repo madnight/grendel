@@ -12,6 +12,8 @@ import Data.Maybe
 import Data.List
 import Data.Grendy.BigQuery
 import Data.Grendy.GraphQL
+import System.Environment (getEnv)
+import Data.String.Conversions (cs)
 
 -- | This function takes a list of (GitHub) repos and a list of (bigquery)
 -- repo name / today stars pairs and applies the todays stars data from
@@ -83,7 +85,8 @@ main = do
   res <- checkAPIError <$> graphQL
   let languages = rows bigQueryResult
   let repos =  res
-  scotty 3000 . get "" . json $ applyTodayStars repos languages
+  port <- read <$> getEnv "PORT"
+  scotty port . get "" . json $ applyTodayStars repos languages
   where
     checkAPIError (Right b) = b
     checkAPIError (Left err) = error err
