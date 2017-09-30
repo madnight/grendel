@@ -86,7 +86,9 @@ main = do
   let languages = rows bigQueryResult
   let repos =  res
   port <- read <$> getEnv "PORT"
-  scotty port . get "" . json $ applyTodayStars repos languages
+  scotty port . get "" $ do
+    setHeader "Access-Control-Allow-Origin" "https://madnight.github.io"
+    json $ applyTodayStars repos languages
   where
     checkAPIError (Right b) = b
     checkAPIError (Left err) = error err
