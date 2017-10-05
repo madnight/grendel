@@ -1,2 +1,2 @@
-# grendy-api
+# grendel
 GitHub Trendy API

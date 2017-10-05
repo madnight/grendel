@@ -70,20 +70,19 @@ bigQuerySQL =
     \ WHERE events.type = 'WatchEvent'\
     \ GROUP BY 1 ORDER BY 2 DESC LIMIT 1000"
 
-starsToString :: TodayStars -> String
+starsToString :: [TodayStar] -> String
 starsToString stars = "repo:" <> starsToString' stars
     where
-      starsToString' stars' = intercalate " repo:"
+      starsToString' = intercalate " repo:"
         . take 100
         . fmap getName
-        $ rows stars'
 
 main :: IO ()
 main = do
   bigQueryResult <- checkAPIError <$> bigQuery bigQuerySQL
   let graphQL = graphQuery . ghQuery $ starsToString bigQueryResult
   res <- checkAPIError <$> graphQL
-  let languages = rows bigQueryResult
+  let languages = bigQueryResult
   let repos =  res
   port <- read <$> getEnv "PORT"
   scotty port . get "" $ do
