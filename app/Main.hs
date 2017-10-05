@@ -14,6 +14,7 @@ import Data.Grendy.BigQuery
 import Data.Grendy.GraphQL
 import System.Environment (getEnv)
 import Data.String.Conversions (cs)
+import Data.List.Split (chunksOf)
 
 -- | This function takes a list of (GitHub) repos and a list of (bigquery)
 -- repo name / today stars pairs and applies the todays stars data from
@@ -71,23 +72,28 @@ bigQuerySQL =
     \ GROUP BY 1 ORDER BY 2 DESC LIMIT 1000"
 
 starsToString :: [TodayStar] -> String
-starsToString stars = "repo:" <> starsToString' stars
-    where
-      starsToString' = intercalate " repo:"
-        . take 100
-        . fmap getName
+starsToString = ("repo:" <>) . intercalate " repo:" . take 100 . fmap getName
+
+starsToStrings :: [[TodayStar]] -> [String]
+starsToStrings = fmap starsToString
+
+fetchRepos :: String -> IO [Repo]
+fetchRepos query = do
+  let graphQL = graphQuery . ghQuery $ query
+  repos <- checkAPIError <$> graphQL
+  pure repos
+   where
+    checkAPIError (Right b) = b
+    checkAPIError (Left err) = error err
 
 main :: IO ()
 main = do
-  bigQueryResult <- checkAPIError <$> bigQuery bigQuerySQL
-  let graphQL = graphQuery . ghQuery $ starsToString bigQueryResult
-  res <- checkAPIError <$> graphQL
-  let languages = bigQueryResult
-  let repos =  res
+  stars <- checkAPIError <$> bigQuery bigQuerySQL
+  repos <- fetchRepos =<< starsToStrings (chunksOf 10 stars)
   port <- read <$> getEnv "PORT"
   scotty port . get "" $ do
     setHeader "Access-Control-Allow-Origin" "https://madnight.github.io"
-    json $ applyTodayStars repos languages
+    json $ applyTodayStars repos stars
   where
     checkAPIError (Right b) = b
     checkAPIError (Left err) = error err
