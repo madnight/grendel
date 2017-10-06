@@ -43,6 +43,7 @@ executable grendel-exe
                      , text
                      , transformers
                      , monad-parallel
+                     , async
                      , aeson
                      , attoparsec
                      , http-types

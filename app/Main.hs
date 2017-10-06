@@ -19,7 +19,9 @@ import Data.List.Split (chunksOf)
 {- import Control.Monad (sequence) -}
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad (when)
+import Control.Monad.Parallel (forkExec)
 {- import Prelude hiding (sequence) -}
+import Control.Concurrent.Async (mapConcurrently)
 
 -- | This function takes a list of (GitHub) repos and a list of (bigquery)
 -- repo name / today stars pairs and applies the todays stars data from
@@ -103,8 +105,11 @@ main :: IO ()
 main = do
   port <- read <$> getEnv "PORT"
   stars <- checkAPIError <$> bigQuery bigQuerySQL
-  repos <- fetchRepos (take 500 stars)
-  let static = applyTodayStars repos stars
+  {- repos <- fetchRepos (take 500 stars) -}
+  let x = fetchRepo . starsToString
+  p1 <- mapConcurrently x (take 5 $ chunksOf 10 stars)
+  p2 <- mapConcurrently x (drop 5 $ chunksOf 10 stars)
+  let static = applyTodayStars (concat (p1 <> p2)) stars
   scotty port $ do
     get "" $ do
       setHeader "Access-Control-Allow-Origin" "https://madnight.github.io"
