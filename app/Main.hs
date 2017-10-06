@@ -15,6 +15,7 @@ import Data.Grendy.GraphQL
 import System.Environment (getEnv)
 import Data.String.Conversions (cs)
 import Data.List.Split (chunksOf)
+import Control.Monad (sequence)
 
 -- | This function takes a list of (GitHub) repos and a list of (bigquery)
 -- repo name / today stars pairs and applies the todays stars data from
@@ -89,11 +90,11 @@ fetchRepos query = do
 main :: IO ()
 main = do
   stars <- checkAPIError <$> bigQuery bigQuerySQL
-  repos <- fetchRepos =<< starsToStrings (chunksOf 10 stars)
+  repos <- sequence (fetchRepos <$> starsToStrings (chunksOf 10 stars))
   port <- read <$> getEnv "PORT"
   scotty port . get "" $ do
     setHeader "Access-Control-Allow-Origin" "https://madnight.github.io"
-    json $ applyTodayStars repos stars
+    json $ applyTodayStars (concat repos) stars
   where
     checkAPIError (Right b) = b
     checkAPIError (Left err) = error err

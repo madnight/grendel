@@ -1,1 +1,1 @@
-web: grendy-api-exe
+web: grendel-exe
