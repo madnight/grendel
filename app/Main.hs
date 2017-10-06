@@ -14,6 +14,9 @@ import Data.Grendy.BigQuery
 import Data.Grendy.GraphQL
 import System.Environment (getEnv)
 import Data.String.Conversions (cs)
+import Data.Time.Clock
+import Data.Time.Calendar
+import Text.Printf (printf)
 
 -- | This function takes a list of (GitHub) repos and a list of (bigquery)
 -- repo name / today stars pairs and applies the todays stars data from
@@ -62,11 +65,11 @@ ghQuery repos = [aesonQQ|
 }
 |]
 
-bigQuerySQL :: String
-bigQuerySQL =
+bigQuerySQL :: String -> String
+bigQuerySQL time =
      "SELECT events.repo.name AS repo,\
     \ COUNT(DISTINCT events.actor.id) AS stars\
-    \ FROM ( SELECT * FROM [githubarchive:day.20170920]) AS events\
+    \ FROM ( SELECT * FROM [githubarchive:day." <> time <> "]) AS events\
     \ WHERE events.type = 'WatchEvent'\
     \ GROUP BY 1 ORDER BY 2 DESC LIMIT 1000"
 
@@ -95,8 +98,13 @@ fetchRepos stars = do
 
 main :: IO ()
 main = do
+  UTCTime day time <- getCurrentTime
+  let yesterday = UTCTime (addDays (-1) day) time
+  let (y, m, d) = toGregorian $ utctDay yesterday
+  let format x = (printf "%02s"(show x))
+  let sqldate = (show y) <> (format m) <> (format d)
   port <- read <$> getEnv "PORT"
-  stars <- checkAPIError <$> bigQuery bigQuerySQL
+  stars <- checkAPIError <$> bigQuery (bigQuerySQL sqldate)
   repos <- fetchRepos (take 500 stars)
   let static = applyTodayStars (repos) stars
   scotty port $ do

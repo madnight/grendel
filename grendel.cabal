@@ -44,6 +44,7 @@ executable grendel-exe
                      , transformers
                      , monad-parallel
                      , async
+                     , time
                      , aeson
                      , attoparsec
                      , http-types
