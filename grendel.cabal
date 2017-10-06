@@ -41,6 +41,8 @@ executable grendel-exe
                      , http-client-tls
                      , lens
                      , text
+                     , transformers
+                     , monad-parallel
                      , aeson
                      , attoparsec
                      , http-types
