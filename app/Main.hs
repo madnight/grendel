@@ -103,7 +103,7 @@ main :: IO ()
 main = do
   port <- read <$> getEnv "PORT"
   stars <- checkAPIError <$> bigQuery bigQuerySQL
-  repos <- fetchRepos stars
+  repos <- fetchRepos (take 500 stars)
   let static = applyTodayStars repos stars
   scotty port $ do
     get "" $ do
