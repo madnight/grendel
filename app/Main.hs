@@ -13,10 +13,13 @@ import Data.List
 import Data.Grendy.BigQuery
 import Data.Grendy.GraphQL
 import System.Environment (getEnv)
-import Data.String.Conversions (cs)
 import Data.Time.Clock
 import Data.Time.Calendar
 import Text.Printf (printf)
+
+(|>) :: a -> (a -> b) -> b
+(|>) = flip ($)
+infixl 0 |>
 
 -- | This function takes a list of (GitHub) repos and a list of (bigquery)
 -- repo name / today stars pairs and applies the todays stars data from
@@ -74,7 +77,10 @@ bigQuerySQL time =
     \ GROUP BY 1 ORDER BY 2 DESC LIMIT 1000"
 
 starsToString :: [TodayStar] -> String
-starsToString = ("repo:" <>) . intercalate " repo:" . take 100 . fmap getName
+starsToString = ("repo:" <>)
+              . intercalate " repo:"
+              . take 100
+              . fmap getName
 
 starsToStrings :: [[TodayStar]] -> [String]
 starsToStrings = fmap starsToString
@@ -84,17 +90,17 @@ checkAPIError (Right b) = b
 checkAPIError (Left err) = error err
 
 fetchRepo :: String -> IO [Repo]
-fetchRepo query = do
-  let graphQL = graphQuery . ghQuery $ query
-  repos <- checkAPIError <$> graphQL
-  pure repos
+fetchRepo query = query
+               |> ghQuery
+               |> graphQuery
+               |> (checkAPIError <$>)
 
 fetchRepos :: [TodayStar] -> IO [Repo]
 fetchRepos stars = do
-  repos <- fetchRepo $ starsToString stars
+  let repos = fetchRepo $ starsToString stars
   case (length stars < 100) of
-        True -> return repos
-        otherwise -> pure repos <> fetchRepos (drop 100 stars)
+        True -> repos
+        otherwise -> repos <> fetchRepos (drop 100 stars)
 
 main :: IO ()
 main = do
@@ -103,11 +109,13 @@ main = do
   let (y, m, d) = toGregorian $ utctDay yesterday
   let format x = (printf "%02s"(show x))
   let sqldate = (show y) <> (format m) <> (format d)
+
   port <- read <$> getEnv "PORT"
   stars <- checkAPIError <$> bigQuery (bigQuerySQL sqldate)
   repos <- fetchRepos (take 500 stars)
-  let static = applyTodayStars (repos) stars
+  let static = encode $! applyTodayStars (repos) stars
+
   scotty port $ do
     get "" $ do
       setHeader "Access-Control-Allow-Origin" "https://madnight.github.io"
-      json $ static
+      raw static
