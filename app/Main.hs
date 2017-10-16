@@ -17,6 +17,8 @@ import Data.Time.Clock
 import Data.Time.Calendar
 import Text.Printf (printf)
 import Data.List.Split (chunksOf)
+import Control.Monad
+import Data.ByteString.Lazy (ByteString(..))
 
 (|>) :: a -> (a -> b) -> b
 (|>) = flip ($)
@@ -86,7 +88,7 @@ starsToString = ("repo:" <>)
 starsToStrings :: [[TodayStar]] -> [String]
 starsToStrings = fmap starsToString
 
-checkAPIError :: Either [Char] t -> t
+checkAPIError :: Either String t -> t
 checkAPIError (Right b) = b
 checkAPIError (Left err) = error err
 
@@ -99,36 +101,27 @@ fetchRepo query = query
 fetchRepos :: [TodayStar] -> IO [Repo]
 fetchRepos stars = do
   let repos = fetchRepo $ starsToString stars
-  case (length stars < 100) of
-        True -> repos
-        otherwise -> repos <> fetchRepos (drop 100 stars)
+  if length stars < 100 then repos else
+    repos <> fetchRepos (drop 100 stars)
 
-sget i f = do
-   setHeader "Access-Control-Allow-Origin" "https://madnight.github.io"
-   raw $ f !! i
-
+getJson :: Int -> [ByteString] -> ScottyM ()
+getJson i f = do
+   let norm n = if n == 0 then "" else show n
+   get (capture ("/" <> norm i)) $ do
+    setHeader "Access-Control-Allow-Origin" "https://madnight.github.io"
+    raw $ f !! i
 
 main :: IO ()
 main = do
   UTCTime day time <- getCurrentTime
   let yesterday = UTCTime (addDays (-1) day) time
   let (y, m, d) = toGregorian $ utctDay yesterday
-  let format x = (printf "%02s"(show x))
-  let sqldate = (show y) <> (format m) <> (format d)
+  let format x = printf "%02s" (show x)
+  let sqldate = show y <> format m <> format d
 
   port <- read <$> getEnv "PORT"
   stars <- checkAPIError <$> bigQuery (bigQuerySQL sqldate)
   repos <- fetchRepos (take 500 stars)
-  let static = encode <$> chunksOf 50 (applyTodayStars (repos) stars)
+  let static = encode <$> chunksOf 50 (applyTodayStars repos stars)
 
-  scotty port $ do
-    get "" $ sget 0 static
-    get "/1" $ sget 1 static
-    get "/2" $ sget 2 static
-    get "/3" $ sget 3 static
-    get "/4" $ sget 4 static
-    get "/5" $ sget 5 static
-    get "/6" $ sget 6 static
-    get "/7" $ sget 7 static
-    get "/8" $ sget 8 static
-    get "/9" $ sget 9 static
+  scotty port $ forM_ [0..9] (`getJson` static)
