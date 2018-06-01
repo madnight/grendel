@@ -63,3 +63,21 @@ Google Big Query
     \ WHERE events.type = 'WatchEvent'\
     \ GROUP BY 1 ORDER BY 2 DESC LIMIT 1000"
 ```
+
+# Usage
+
+Usage with compiled Docker Image
+
+```bash
+docker run -it -e PORT=3000 -e GITHUB_API_TOKEN=YOUR_TOKEN_HERE -p 3000:3000 madnight/grendel
+```
+
+Or compile it
+
+```bash
+git clone https://github.com/madnight/grendel.git && cd grendel
+export GITHUB_API_TOKEN=YOUR_TOKEN_HERE
+export PORT=3000
+stack build && stack install && grendel-exe
+```
+
