@@ -20,10 +20,6 @@ import Data.List.Split (chunksOf)
 import Control.Monad
 import Data.ByteString.Lazy (ByteString(..))
 
-(|>) :: a -> (a -> b) -> b
-(|>) = flip ($)
-infixl 0 |>
-
 -- | This function takes a list of (GitHub) repos and a list of (bigquery)
 -- repo name / today stars pairs and applies the todays stars data from
 -- big query to the github repos. In other words, add the number of todays
@@ -80,48 +76,43 @@ bigQuerySQL time =
     \ GROUP BY 1 ORDER BY 2 DESC LIMIT 1000"
 
 starsToString :: [TodayStar] -> String
-starsToString = ("repo:" <>)
-              . intercalate " repo:"
-              . take 100
-              . fmap getName
-
-starsToStrings :: [[TodayStar]] -> [String]
-starsToStrings = fmap starsToString
+starsToString = (<>) "repo:" . intercalate " repo:" . take 100 . fmap getName
 
 checkAPIError :: Either String t -> t
 checkAPIError (Right b) = b
 checkAPIError (Left err) = error err
 
 fetchRepo :: String -> IO [Repo]
-fetchRepo query = query
-               |> ghQuery
-               |> graphQuery
-               |> (checkAPIError <$>)
+fetchRepo = fmap checkAPIError . graphQuery . ghQuery
 
 fetchRepos :: [TodayStar] -> IO [Repo]
-fetchRepos stars = do
-  let repos = fetchRepo $ starsToString stars
-  if length stars < 100 then repos else
-    repos <> fetchRepos (drop 100 stars)
+fetchRepos stars
+    | length stars < 100 = repos
+    | otherwise = repos <> fetchRepos (drop 100 stars)
+    where
+      repos = fetchRepo $ starsToString stars
 
-getJson :: Int -> [ByteString] -> ScottyM ()
-getJson i f = do
-   let norm n = if n == 0 then "" else show n
-   get (capture ("/" <> norm i)) $ do
+serveJson :: Int -> [ByteString] -> ScottyM ()
+serveJson pager json =
+   get (capture $ "/" <> norm pager) $ do
     setHeader "Access-Control-Allow-Origin" "https://madnight.github.io"
-    raw $ f !! i
+    raw $ json !! pager
+    where
+      norm n
+       | n == 0 = ""
+       | otherwise = show n
 
 main :: IO ()
 main = do
   UTCTime day time <- getCurrentTime
   let yesterday = UTCTime (addDays (-1) day) time
   let (y, m, d) = toGregorian $ utctDay yesterday
-  let format x = printf "%02s" (show x)
   let sqldate = show y <> format m <> format d
 
   port <- read <$> getEnv "PORT"
   stars <- checkAPIError <$> bigQuery (bigQuerySQL sqldate)
-  repos <- fetchRepos (take 500 stars)
-  let static = encode <$> chunksOf 50 (applyTodayStars repos stars)
-
-  scotty port $ forM_ [0..9] (`getJson` static)
+  repos <- fetchRepos $ take 500 stars
+  let json = encode <$> chunksOf 50 (applyTodayStars repos stars)
+  scotty port $ forM_ [0..9] (`serveJson` json)
+  where
+    format = printf "%02s" . show
