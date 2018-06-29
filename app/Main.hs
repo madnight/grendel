@@ -18,6 +18,7 @@ import Data.Time.Calendar
 import Text.Printf (printf)
 import Data.List.Split (chunksOf)
 import Control.Monad
+import System.Timeout (timeout)
 import Data.ByteString.Lazy (ByteString(..))
 
 -- | This function takes a list of (GitHub) repos and a list of (bigquery)
@@ -102,17 +103,17 @@ serveJson pager json =
        | n == 0 = ""
        | otherwise = show n
 
-main :: IO ()
-main = do
-  UTCTime day time <- getCurrentTime
-  let yesterday = UTCTime (addDays (-1) day) time
-  let (y, m, d) = toGregorian $ utctDay yesterday
-  let sqldate = show y <> format m <> format d
 
-  port <- read <$> getEnv "PORT"
-  stars <- checkAPIError <$> bigQuery (bigQuerySQL sqldate)
-  repos <- fetchRepos $ take 500 stars
-  let json = encode <$> chunksOf 50 (applyTodayStars repos stars)
-  scotty port $ forM_ [0..9] (`serveJson` json)
+main :: IO (Maybe ())
+main = forever $ timeout (24 * 60 * 60 * 1000 * 1000) $ do -- update every 24h
+    UTCTime day time <- getCurrentTime
+    let yesterday = UTCTime (addDays (-1) day) time
+    let (y, m, d) = toGregorian $ utctDay yesterday
+    let sqldate = show y <> format m <> format d
+    port <- read <$> getEnv "PORT"
+    stars <- checkAPIError <$> bigQuery (bigQuerySQL sqldate)
+    repos <- fetchRepos $ take 500 stars
+    let json = encode <$> chunksOf 50 (applyTodayStars repos stars)
+    scotty port $ forM_ [0..9] (`serveJson` json)
   where
     format = printf "%02s" . show
