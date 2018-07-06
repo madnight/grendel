@@ -44,7 +44,9 @@ ghQuery repos = [aesonQQ|
                         nameWithOwner
                         createdAt
                         description
-                        license
+                        licenseInfo {
+                            name
+                        }
                         primaryLanguage {
                             name
                         }

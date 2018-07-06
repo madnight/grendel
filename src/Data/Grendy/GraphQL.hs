@@ -35,7 +35,7 @@ instance FromJSON Repo  where
     let p = (o .: "node" >>=)
     name       <-            p (.: "nameWithOwner")
     date       <-            p (.: "createdAt")
-    license    <- optional $ p (.: "license")
+    license    <- optional $ p (.: "licenseInfo") >>= (.: "name")
     desc       <- optional $ p (.: "description")
     language   <- optional $ p (.: "primaryLanguage") >>= (.: "name")
     avatarUrl  <-            p (.: "owner")           >>= (.: "avatarUrl")
