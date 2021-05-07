@@ -1,5 +1,5 @@
 # grendel
-Grendel is the GitHub Trends API for Grendy -> https://github.com/madnight/grendy
+Grendel is the GitHub Trends API
 
 ![](https://i.imgur.com/jn2FeAN.png)
 
